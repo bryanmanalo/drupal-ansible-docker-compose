@@ -1,0 +1,44 @@
+---
+# tasks file for nginx
+- name: check if nginx is installed
+  yum:
+    list=nginx
+  register: is_installed
+
+- name: Download RPM from URL
+  command: rpm -ivh http://nginx.org/packages/centos/7/noarch/RPMS/nginx-release-centos-7-0.el7.ngx.noarch.rpm
+  when:  is_installed.results|selectattr("yumstate", "match", "installed")|list|length == 0
+
+- name: Install nginx
+  shell: yes '' | yum -y install nginx
+
+- name: Install components
+  yum: name={{item}} state=installed
+  with_items:
+    - git
+  tags: [ 'packages' ]
+
+- name: Nginx requires user www-data user to start
+  user:
+    name: www-data
+
+- name: write our nginx.conf
+  action: template src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+  notify: restart nginx
+
+- name: Create /etc/nginx/sites-enabled and sites-available
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "/etc/nginx/sites-enabled"
+    - "/etc/nginx/sites-available"
+
+
+- name: Put in some default sites for troubleshooting
+  action: template src=default-site.j2 dest=/etc/nginx/sites-{{item}}/default
+  with_items:
+    - available
+    - enabled
+  notify: restart nginx
